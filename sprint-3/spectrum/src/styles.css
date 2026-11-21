@@ -174,6 +174,8 @@ body[data-route="cashflows"] .metric dd { font-size: clamp(17px, 1.94vw, 30px); 
 .work-panel { padding-inline: clamp(13px, 1.6vw, 22px); padding-bottom: 17px; }
 .view-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; border-bottom: 1px solid var(--line); margin-bottom: 17px; }
 .view-bar > .button { min-height: 36px; margin-block: 7px; }
+.table-exports { display: flex; flex-wrap: wrap; gap: 7px; margin-block: 7px; }
+.table-exports .button { min-height: 36px; }
 .view-switch { display: flex; align-self: stretch; gap: clamp(4px, 1.5vw, 21px); }
 .view-switch button {
   border: 0;
@@ -298,6 +300,16 @@ g[role="button"]:focus-visible .chart-hit { stroke: var(--focus); stroke-width: 
 .cash-filter > span { color: var(--muted); font-size: 13px; }
 .issues { margin: -7px 0 12px; color: var(--loss-dark); }
 .issues ul { margin: 0 0 12px; padding-left: 19px; }
+.scenario-panel { padding: clamp(14px, 2vw, 24px); margin-bottom: 16px; }
+.scenario-source { color: var(--muted); font-size: 14px; margin-bottom: 17px; }
+.scenario-source .link-button { margin-left: 6px; }
+.scenario-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 8px; }
+.scenario-fields input { width: 100%; }
+.scenario-file-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 4px; }
+.scenario-file-actions .button { min-height: 34px; }
+.scenario-result-head { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.scenario-result-head .field-help { margin: 4px 0 0; }
+.scenario-note { margin-top: 13px; }
 
 dialog { width: min(505px, calc(100% - 24px)); max-height: calc(100dvh - 24px); padding: 21px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 16px 64px #1727202b; }
 dialog::backdrop { background: #17272065; }
@@ -341,7 +353,7 @@ dialog::backdrop { background: #17272065; }
   .brand { margin-left: 4px; }
   .brand strong { font-size: 24px; }
   .brand-mark { width: 23px; height: 23px; }
-  .navigation { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .navigation { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .navigation a { justify-content: center; }
   .sidebar-foot { display: none; }
 }
@@ -386,11 +398,14 @@ dialog::backdrop { background: #17272065; }
   .view-bar { flex-wrap: wrap; gap: 0 6px; align-items: start; }
   .view-bar > .button { font-size: 12px; padding-inline: 7px; min-height: 34px; }
   .view-bar > .button svg { width: 15px; height: 15px; }
+  .table-exports .button { padding-inline: 7px; font-size: 12px; }
   .cash-source { margin-top: -7px; }
   .distribution-row { grid-template-columns: minmax(0, 1fr) 41px 41px 42px; gap: 5px; font-size: 13px; }
   .table-controls > * { max-width: 100%; }
 }
 @media (max-width: 450px) {
+  .scenario-fields { grid-template-columns: minmax(0, 1fr); }
+  #scenario-result { scroll-margin-top: 140px; }
   .factor-table, .payment-table { min-width: 0; font-size: 12px; }
   .factor-table { table-layout: fixed; overflow-wrap: anywhere; }
   .factor-table th:first-child { width: 40%; }

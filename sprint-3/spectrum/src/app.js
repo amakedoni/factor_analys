@@ -9,7 +9,7 @@ const App = (() => {
   const helpModal = document.getElementById('help-modal');
   const toastBox = document.getElementById('toast');
   const initialDemo = Portfolio.generate(Portfolio.defaults);
-  const originalCash = Cashflows.fromCsv(TeamOneFiles.summary, TeamOneFiles.cashflows, 'Встроенный пример выгрузки калькулятора команды 1');
+  const originalCash = Cashflows.fromCsv(BundledData.summary, BundledData.cashflows, 'Встроенный пример выгрузки калькулятора команды 1');
 
   function restore() {
     try {
@@ -28,6 +28,7 @@ const App = (() => {
     portfolio: { mode: 'deals', page: 0, sortKey: 'id', sortDirection: 1, ...dealFilters },
     analysis: { ...analysisDefaults, source: saved === initialDemo ? 'demo' : 'generated', methodOpen: false },
     cash: { mode: 'dates', batch: originalCash, id: originalCash.deals[0].id, year: 'all', page: 0, issuesOpen: false },
+    valuation: { curves: null, fileName: '', reportDate: '', dealId: '', result: null, error: '' },
   };
   let cache;
   let toastTimer;
@@ -73,7 +74,8 @@ const App = (() => {
       const deal = activeDeal();
       const rows = state.cash.year === 'all' ? deal.payments : deal.payments.filter((payment) => payment.date.startsWith(`${state.cash.year}-`));
       main.innerHTML = Views.cashflow(state.cash, state.cash.batch, deal, Cashflows.byYear(deal.payments), rows, pageSize);
-    } else {
+    } else if (state.route === 'valuation') main.innerHTML = Views.valuation(state.valuation, state.cash.batch);
+    else {
       const { result, dates } = activeAnalysis();
       main.innerHTML = Views.analysis(state.analysis, result, dates, state.result !== initialDemo);
     }
@@ -167,8 +169,13 @@ const App = (() => {
     modal.querySelector('input').focus();
   }
 
-  function setCash(batch) {
+  function applyCash(batch) {
     Object.assign(state.cash, { mode: 'dates', batch, id: batch.deals[0].id, year: 'all', page: 0, issuesOpen: false });
+    Object.assign(state.valuation, { reportDate: batch.reportDate ?? '', dealId: '', result: null, error: '' });
+  }
+
+  function setCash(batch) {
+    applyCash(batch);
     if (modal.open) modal.close();
     render(false);
     main.querySelector('[data-action="open-import"]')?.focus({ preventScroll: true });
@@ -184,8 +191,12 @@ const App = (() => {
     submit.disabled = true;
     submit.textContent = 'Проверяем файлы…';
     try {
-      const [summary, flows] = await Promise.all([files.get('summary').text(), files.get('flows').text()]);
-      const batch = Cashflows.fromCsv(summary, flows, 'Загруженная выгрузка');
+      const inputFile = files.get('input');
+      const [summary, flows, input] = await Promise.all([
+        files.get('summary').text(), files.get('flows').text(), inputFile?.name ? inputFile.text() : null,
+      ]);
+      const imported = Cashflows.fromCsv(summary, flows, 'Загруженная выгрузка');
+      const batch = input === null ? imported : Calculator.reconcileInput(imported, input);
       if (!modal.open || !form.isConnected) return;
       setCash(batch);
       toast(batch.warnings.length ? 'Файлы загружены. Посмотрите результаты сверки.' : 'Файлы загружены, суммы сверены.');
@@ -215,8 +226,74 @@ const App = (() => {
     toast('Отчёт NPV скачан.');
   }
 
+  function exportCalculator(button) {
+    const id = button.dataset.deal;
+    const deals = id ? state.result.deals.filter((deal) => deal.id === id) : state.result.deals;
+    if (!deals.length) return;
+    const name = id ? `spectrum_cf_${id}.csv` : 'spectrum_cf_deals.csv';
+    Csv.download(name, Calculator.exportInput(deals));
+    toast(`CSV для калькулятора скачан · ${UI.dealCount(deals.length)}`);
+  }
+
+  function clearValuationResult() {
+    Object.assign(state.valuation, { result: null, error: '' });
+    document.getElementById('valuation-results')?.remove();
+    document.getElementById('valuation-error')?.remove();
+  }
+
+  async function importCurves(input) {
+    const file = input.files[0];
+    if (!file) return;
+    clearValuationResult();
+    state.valuation.curves = null;
+    document.getElementById('valuation-submit').disabled = true;
+    let curves = null, error = '';
+    try { curves = Scenarios.fromFile(await file.text(), file.name); }
+    catch (cause) { error = cause.message; }
+    if (!input.isConnected || input.files[0] !== file) return;
+    Object.assign(state.valuation, { curves, fileName: curves ? file.name : '', result: null, error });
+    render();
+    document.getElementById('curve-picker')?.focus({ preventScroll: true });
+  }
+
+  function valueCurves(form) {
+    const v = state.valuation;
+    const fields = new FormData(form);
+    v.reportDate = fields.get('reportDate');
+    v.dealId = fields.get('dealId');
+    v.error = '';
+    try {
+      if (!v.curves) throw new Error('Загрузите файл кривых.');
+      v.result = Scenarios.evaluate(v.curves, state.cash.batch, v.reportDate, v.dealId);
+    } catch (error) {
+      v.result = null;
+      v.error = error.message;
+    }
+    render();
+    document.getElementById('scenario-result')?.focus();
+  }
+
+  function showIntegrationExample() {
+    const { summary, cashflows, curves: csv } = BundledData.integration;
+    const batch = Cashflows.fromCsv(summary, cashflows, 'Совместный пример · синтетическая сделка');
+    const curves = Scenarios.fromFile(csv, 'curves.csv');
+    const result = Scenarios.evaluate(curves, batch, curves.reportDate);
+    applyCash(batch);
+    Object.assign(state.valuation, { curves, fileName: 'curves.csv', reportDate: curves.reportDate, result });
+    render();
+    document.getElementById('scenario-result')?.focus();
+  }
+
   const actions = {
     report: exportAnalysis,
+    'calculator-export': exportCalculator,
+    'curve-picker': () => document.getElementById('curve-file').click(),
+    'valuation-example': showIntegrationExample,
+    'valuation-export': () => {
+      const { result } = state.valuation;
+      if (result) Csv.download(`scenario_pv_${result.reportDate}.csv`, Csv.serialize(Scenarios.exportRows(result)));
+    },
+    'open-valuation': () => { location.hash = 'valuation'; },
     'open-help': (button) => {
       const content = Help.content(button.dataset.help);
       if (!content) return;
@@ -308,6 +385,7 @@ const App = (() => {
   document.addEventListener('submit', (event) => {
     if (event.target.id === 'generator-form') { event.preventDefault(); generate(event.target); }
     if (event.target.id === 'import-form') { event.preventDefault(); void importCash(event.target); }
+    if (event.target.id === 'valuation-form') { event.preventDefault(); valueCurves(event.target); }
   });
   document.addEventListener('input', (event) => {
     const el = event.target;
@@ -335,6 +413,17 @@ const App = (() => {
     }
     if (el.id === 'cash-id') { Object.assign(state.cash, { id: el.value, year: 'all', page: 0 }); render(); }
     if (el.id === 'cash-year') { Object.assign(state.cash, { year: el.value, page: 0 }); render(); }
+    if (el.id === 'curve-file') await importCurves(el);
+    if (el.id === 'valuation-date' || el.id === 'valuation-deal') {
+      const v = state.valuation;
+      v[el.name] = el.value;
+      if (el.id === 'valuation-deal') {
+        v.reportDate = state.cash.batch.deals.find(({ id }) => id === v.dealId)?.reportDate
+          ?? state.cash.batch.reportDate ?? v.reportDate;
+        document.getElementById('valuation-date').value = v.reportDate;
+      }
+      clearValuationResult();
+    }
     if (el.id === 'settings-file' && el.files[0]) {
       try {
         const saved = JSON.parse(await el.files[0].text());

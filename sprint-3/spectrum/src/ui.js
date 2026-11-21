@@ -5,6 +5,7 @@ const UI = (() => {
   const plurals = new Intl.PluralRules('ru-RU');
   const icons = {
     analysis: '<path d="M4 20v-6m5 6V9m5 11V5m5 15V3"/>',
+    valuation: '<path d="M3 4v16h18M6 15l4-4 4 1 6-5M6 17l4-2 4 2 6-3"/>',
     generator: '<path d="M13.5 2.5H6a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M13 3v6h6M8 13h8m-8 4h5"/>',
     portfolio: '<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/>',
     cashflows: '<ellipse cx="15" cy="5" rx="6" ry="2.5"/><path d="M9 5v4m0 0c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V5m0 4v4c0 1.4-2.7 2.5-6 2.5h-1.5"/><ellipse cx="8" cy="13" rx="5" ry="2.5"/><path d="M3 13v6c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5v-6m-10 3c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5"/>',

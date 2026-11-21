@@ -1,8 +1,18 @@
 const Csv = (() => {
+  function headerDelimiter(text) {
+    const counts = new Map([[',', 0], [';', 0], ['\t', 0]]);
+    let quoted = false;
+    for (const char of text.trimStart()) {
+      if (char === '"') quoted = !quoted;
+      else if (!quoted && (char === '\r' || char === '\n')) break;
+      else if (!quoted && counts.has(char)) counts.set(char, counts.get(char) + 1);
+    }
+    return [...counts].reduce((best, entry) => entry[1] > best[1] ? entry : best)[0];
+  }
+
   function parse(input, required, fileName) {
     const text = input.replace(/^\uFEFF/, '');
-    const firstLine = text.trimStart().split(/\r?\n/, 1)[0];
-    const delimiter = [',', ';', '\t'].find((mark) => firstLine.includes(mark)) ?? ',';
+    const delimiter = headerDelimiter(text);
     const records = [];
     let row = [], value = '', quoted = false, closed = false;
     const finishCell = () => { row.push(value); value = ''; closed = false; };
@@ -39,13 +49,13 @@ const Csv = (() => {
     });
   }
 
-  function serialize(rows) {
+  function serialize(rows, { delimiter = ',', bom = true } = {}) {
     const cell = (value) => {
       let string = String(value ?? '');
       if (typeof value === 'string' && /^[\s]*[=+@-]/.test(string) && !/^[+-]?\d+(?:[.,]\d+)?$/.test(string)) string = `'${string}`;
       return /[";,\r\n]/.test(string) ? `"${string.replaceAll('"', '""')}"` : string;
     };
-    return '\uFEFF' + rows.map((row) => row.map(cell).join(',')).join('\r\n') + '\r\n';
+    return (bom ? '\uFEFF' : '') + rows.map((row) => row.map(cell).join(delimiter)).join('\r\n') + '\r\n';
   }
 
   function download(name, data, mediaType = 'text/csv;charset=utf-8') {

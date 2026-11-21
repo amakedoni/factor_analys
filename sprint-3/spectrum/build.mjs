@@ -2,13 +2,14 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 const root = new URL('./', import.meta.url);
 const read = (file) => readFile(new URL(file, root), 'utf8');
-const modules = ['portfolio', 'analysis', 'csv', 'cashflows', 'ui', 'help', 'charts', 'views', 'app'];
-const [template, css, summary, cashflows, code] = await Promise.all([
+const modules = ['portfolio', 'analysis', 'csv', 'cashflows', 'calculator', 'scenarios', 'ui', 'help', 'charts', 'views', 'app'];
+const [template, css, summary, cashflows, demoSummary, demoFlows, demoCurves, code] = await Promise.all([
   read('src/index.template.html'), read('src/styles.css'), read('data/deal_summary.csv'), read('data/cashflows.csv'),
+  read('data/integration/deal_summary.csv'), read('data/integration/cashflows.csv'), read('data/integration/curves.csv'),
   Promise.all(modules.map((file) => read(`src/${file}.js`))),
 ]);
-const files = JSON.stringify({ summary, cashflows });
-const script = `(() => {\n'use strict';\nconst TeamOneFiles = ${files};\n${code.join('\n\n')}\n})();`;
+const files = JSON.stringify({ summary, cashflows, integration: { summary: demoSummary, cashflows: demoFlows, curves: demoCurves } });
+const script = `(() => {\n'use strict';\nconst BundledData = ${files};\n${code.join('\n\n')}\n})();`;
 const html = template
   .replace(/\s*<!-- @template-help:begin -->[\s\S]*?<!-- @template-help:end -->\s*/, '')
   .replace('<!-- @style -->', () => `<style>${css}</style>`)

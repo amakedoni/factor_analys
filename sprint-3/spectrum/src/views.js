@@ -1,5 +1,5 @@
 const Views = (() => {
-  const labels = { generator: 'Генератор', portfolio: 'Состав портфеля', analysis: 'Факторный анализ', cashflows: 'Денежные потоки' };
+  const labels = { generator: 'Генератор', portfolio: 'Состав портфеля', analysis: 'Факторный анализ', cashflows: 'Денежные потоки', valuation: 'Сценарная оценка' };
   const formatOptions = (object, selected) => Object.entries(object).map(([key, value]) => UI.option(key, value, selected)).join('');
   const tableWrap = (label, table) => `<div class="table-scroll" tabindex="0" aria-label="${UI.esc(label)}">${table}</div>`;
 
@@ -112,7 +112,9 @@ const Views = (() => {
       { label: 'Средний срок', value: `${UI.decimal(stats.meanTerm)}&nbsp;мес.` },
       { label: 'Средняя ставка', context: 'С учётом сумм сделок', value: UI.pct(stats.meanRate * 100), help: 'weightedRate' },
     ]);
-    const bar = viewBar({ deals: 'Сделки', distribution: 'Распределение' }, view.mode, 'portfolio-view', 'Состав портфеля', UI.button('Скачать все сделки', 'download', 'portfolio-export', 'secondary', 'title="Весь портфель в CSV"'));
+    const exports = `<div class="table-exports">${UI.button('Скачать все сделки', 'download', 'portfolio-export', 'secondary', 'title="Весь портфель в CSV"')}
+      ${UI.button('CSV для калькулятора', 'download', 'calculator-export', 'secondary', 'title="Входной файл для калькулятора команды 1"')}</div>`;
+    const bar = viewBar({ deals: 'Сделки', distribution: 'Распределение' }, view.mode, 'portfolio-view', 'Состав портфеля', exports);
     const content = view.mode === 'distribution'
       ? `<p class="view-hint">«Цель» — доля из настроек. ${Help.label('«Факт» — доля в готовом портфеле.', 'distribution')} Нажмите на строку, чтобы увидеть сделки этой группы.</p>
         <div class="distribution-grid">${distribution('Тип платежей', stats.payments, 'paymentFilter')}${distribution('Тип ставки', stats.rates, 'rateFilter')}${distribution('Сроки сделок', stats.terms, 'termFilter')}</div>
@@ -142,7 +144,8 @@ const Views = (() => {
         ['Надбавка к индексу', `${UI.signed(deal.spread * 100, (n) => UI.money(n, true))} п. п.`, 'floatingIndex']);
     }
     return `<div class="dialog-head"><h2 id="deal-title">Сделка ${UI.esc(deal.id)}</h2><button type="button" class="icon-button" data-action="close-deal" aria-label="Закрыть" autofocus>${UI.icon('close')}</button></div>
-      <dl class="facts">${fields.map(([label, value, help]) => `<div><dt>${help ? Help.label(label, help) : UI.esc(label)}</dt><dd>${UI.esc(value)}</dd></div>`).join('')}</dl>`;
+      <dl class="facts">${fields.map(([label, value, help]) => `<div><dt>${help ? Help.label(label, help) : UI.esc(label)}</dt><dd>${UI.esc(value)}</dd></div>`).join('')}</dl>
+      <div class="modal-actions">${UI.button('CSV сделки для калькулятора', 'download', 'calculator-export', 'secondary', `data-deal="${UI.esc(deal.id)}"`)}</div>`;
   }
 
   const factorNotes = {
@@ -255,7 +258,9 @@ const Views = (() => {
   }
 
   function cashflow(view, batch, deal, years, rows, pageSize) {
-    const header = UI.heading('Денежные потоки', `${batch.source}.`, UI.button('Загрузить CSV', 'upload', 'open-import', 'primary'));
+    const actions = `<div class="page-actions">${UI.button('Оценить по кривым', 'right', 'open-valuation')}
+      ${UI.button('Загрузить CSV', 'upload', 'open-import', 'primary')}</div>`;
+    const header = UI.heading('Денежные потоки', `${batch.source}.`, actions);
     const metrics = UI.metrics([
       { label: 'Начальный долг', value: UI.money(deal.opening_principal, true) },
       { label: 'Погашение тела', value: UI.money(deal.total_principal, true), help: 'principalRepaid' },
@@ -291,11 +296,52 @@ const Views = (() => {
       <p class="dialog-note">Выберите два файла из одного запуска калькулятора команды 1.</p>
       <label class="file-field"><strong>Сводка по сделкам</strong><span>deal_summary.csv — итоги по каждой сделке</span><input type="file" name="summary" accept=".csv,text/csv" required></label>
       <label class="file-field"><strong>Денежные потоки</strong><span>cashflows.csv — отдельные платежи по датам</span><input type="file" name="flows" accept=".csv,text/csv" required></label>
+      <label class="file-field"><strong>Вход калькулятора</strong><span>Необязательно. Нормализованный CSV помогает сверить состав и даты.</span><input type="file" name="input" accept=".csv,text/csv"></label>
       <div id="import-error" class="form-message error" role="alert" hidden></div>
       <div class="modal-actions">${custom ? UI.button('Вернуть пример', null, 'reset-cash') : UI.button('Отмена', null, 'close-import')}<button class="button primary" type="submit">${UI.icon('upload')}Загрузить файлы</button></div>
     </form>`;
   }
 
-  return { labels, sidebar, generator, portfolio, dealTable, dealDialog, analysis, factorDialog, cashflow, importDialog };
+  function valuation(view, batch) {
+    const header = UI.heading('Сценарная оценка',
+      'Сравните стоимость одних и тех же платежей по базовой и стрессовым кривым.',
+      UI.button('Загрузить совместный пример', null, 'valuation-example'));
+    const curveInfo = view.curves
+      ? `${view.fileName} · ${UI.date(view.curves.reportDate)}${view.curves.provenance ? ` · ${view.curves.provenance}` : ''}`
+      : '';
+    const scope = [UI.option('', 'Вся выгрузка', view.dealId),
+      ...batch.deals.map((deal) => UI.option(deal.id, `Сделка № ${deal.id}`, view.dealId))].join('');
+    const form = `<section class="panel scenario-panel" aria-label="Данные для оценки">
+      <p class="scenario-source"><strong>Денежные потоки</strong> · ${UI.esc(batch.source)} · ${UI.dealCount(batch.deals.length)} <a class="link-button" href="#cashflows">Изменить выгрузку</a></p>
+      <form id="valuation-form">
+        <div class="analysis-filters scenario-fields">
+          <label>Отчётная дата потоков<input type="date" name="reportDate" id="valuation-date" value="${UI.esc(view.reportDate)}" required aria-describedby="valuation-date-help"></label>
+          <label>Сделки в расчёте<select name="dealId" id="valuation-deal">${scope}</select></label>
+        </div>
+        <p class="field-help" id="valuation-date-help">Возьмите дату из поля report_dttm входного файла калькулятора. На ту же дату нужны кривые.</p>
+        <div class="file-field"><strong>Кривые команды 2</strong><span>CSV из интерфейса кривых или JSON готового расчёта</span>
+          <div class="scenario-file-actions">${UI.button(view.curves ? 'Заменить файл' : 'Выбрать файл', 'upload', 'curve-picker', 'secondary', 'id="curve-picker"')}
+            <span role="status">${UI.esc(curveInfo)}</span></div>
+          <input id="curve-file" type="file" accept=".csv,.json,text/csv,application/json" hidden>
+        </div>
+        ${view.error ? `<p class="form-message error" role="alert" id="valuation-error">${UI.esc(view.error)}</p>` : ''}
+        <button class="button primary" type="submit" id="valuation-submit" ${view.curves ? '' : 'disabled'}>Рассчитать PV</button>
+      </form></section>`;
+    if (!view.result) return header + form;
+    const { results, reportDate, dealCount } = view.result;
+    const rows = results.map(({ name, pv, delta }) => `<tr><th scope="row">${UI.esc(name)}</th>
+      <td class="t-right amount">${UI.money(pv, true)}</td><td class="t-right amount ${UI.tone(delta)}">${UI.signed(delta, (x) => UI.money(x, true))}</td></tr>`).join('');
+    const table = tableWrap('Стоимость по сценариям', `<table class="factor-table"><thead><tr>
+      <th scope="col">Сценарий</th><th scope="col" class="t-right">PV, ₽</th><th scope="col" class="t-right">Δ к базе, ₽</th></tr></thead><tbody>${rows}</tbody></table>`);
+    return header + form + `<section class="panel scenario-panel" id="valuation-results" aria-labelledby="scenario-result">
+      <div class="scenario-result-head"><div><h2 id="scenario-result" tabindex="-1">Стоимость по сценариям</h2>
+        <p class="field-help">${UI.date(reportDate)} · ${UI.dealCount(dealCount)}</p></div>
+        ${UI.button('Скачать результаты', 'download', 'valuation-export')}</div>
+      ${table}
+      <p class="view-hint scenario-note">PV складывает дисконтированные платежи. Δ показывает стоимость сценария минус стоимость по базовой кривой.</p>
+    </section>`;
+  }
+
+  return { labels, sidebar, generator, portfolio, dealTable, dealDialog, analysis, factorDialog, cashflow, importDialog, valuation };
 })();
 
